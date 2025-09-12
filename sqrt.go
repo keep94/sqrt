@@ -63,13 +63,13 @@ var (
 // reuse a Number instance when possible. For example the code:
 //
 //	n := sqrt.Sqrt(6)
-//	fmt.Println(sqrt.FindFirst(n, []int{0, 0, 0, 0, 0}))
-//	fmt.Println(sqrt.FindFirst(n, []int{2, 2, 2, 2, 2}))
+//	fmt.Println(n.At(10000))
+//	fmt.Println(n.At(10001))
 //
 // runs faster than the code:
 //
-//	fmt.Println(sqrt.FindFirst(sqrt.Sqrt(6), []int{0, 0, 0, 0, 0}))
-//	fmt.Println(sqrt.FindFirst(sqrt.Sqrt(6), []int{2, 2, 2, 2, 2}))
+//	fmt.Println(sqrt.Sqrt(6).At(10000))
+//	fmt.Println(sqrt.Sqrt(6).At(10001))
 //
 // In the first code block, the second line reuses digits computed in the
 // first line, but in the second code block, no reuse is possible since
