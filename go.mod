@@ -3,7 +3,7 @@ module github.com/keep94/sqrt
 go 1.24.1
 
 require (
-	github.com/keep94/itertools v0.7.2
+	github.com/keep94/itertools v0.8.0
 	github.com/stretchr/testify v1.11.1
 )
 
