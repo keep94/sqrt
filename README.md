@@ -21,12 +21,14 @@ import (
 )
 
 func main() {
+    var ctxt sqrt.Context
+    defer ctxt.Close()
 
     // Print the first 1000 digits of the square root of 2.
-    fmt.Printf("%.1000g\n", sqrt.Sqrt(2))
+    fmt.Printf("%.1000g\n", ctxt.Sqrt(2))
 
     // Print the 10,000th digit of the cube root of 5.
-    fmt.Println(sqrt.CubeRoot(5).At(9999))
+    fmt.Println(ctxt.CubeRoot(5).At(9999))
 }
 ```
 
