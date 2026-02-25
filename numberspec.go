@@ -45,7 +45,6 @@ func (c *context) Close() {
 
 type memoizer struct {
 	iter            func() int
-	ctxt            *context
 	mu              sync.Mutex
 	mustGrow        *sync.Cond
 	updateAvailable *sync.Cond
@@ -55,11 +54,11 @@ type memoizer struct {
 }
 
 func newMemoizeSpec(iter func() int, ctxt *context) numberSpec {
-	result := &memoizer{iter: iter, ctxt: ctxt}
+	result := &memoizer{iter: iter}
 	result.mustGrow = sync.NewCond(&result.mu)
 	result.updateAvailable = sync.NewCond(&result.mu)
 	ctxt.Start()
-	go result.run()
+	go result.run(ctxt)
 	return result
 }
 
@@ -152,8 +151,8 @@ func (m *memoizer) setData(data []int8, done bool) {
 	m.updateAvailable.Broadcast()
 }
 
-func (m *memoizer) run() {
-	defer m.ctxt.End()
+func (m *memoizer) run(ctxt *context) {
+	defer ctxt.End()
 	var data []int8
 	for i := 0; i < kMaxChunks; i++ {
 		m.waitToGrow()
@@ -165,7 +164,7 @@ func (m *memoizer) run() {
 			}
 			data = append(data, int8(x))
 		}
-		if m.ctxt.Closed() {
+		if ctxt.Closed() {
 			m.setData(data, true)
 			return
 		}
