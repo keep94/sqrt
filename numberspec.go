@@ -18,21 +18,15 @@ type numberSpec interface {
 }
 
 type memoizer struct {
-	iter            func() int
-	mu              sync.Mutex
-	mustGrow        *sync.Cond
-	updateAvailable *sync.Cond
-	data            []int8
-	maxLength       int
-	done            bool
+	updateMu sync.Mutex
+	iter     func() int
+	readMu   sync.Mutex
+	data     []int8
+	done     bool
 }
 
 func newMemoizeSpec(iter func() int) numberSpec {
-	result := &memoizer{iter: iter}
-	result.mustGrow = sync.NewCond(&result.mu)
-	result.updateAvailable = sync.NewCond(&result.mu)
-	go result.run()
-	return result
+	return &memoizer{iter: iter}
 }
 
 func (m *memoizer) At(index int) int {
@@ -89,56 +83,53 @@ func (m *memoizer) ScanValues(index, limit int, yield func(value int) bool) {
 	}
 }
 
+func (m *memoizer) get() ([]int8, bool) {
+	m.readMu.Lock()
+	defer m.readMu.Unlock()
+	return m.data, m.done
+}
+
+func (m *memoizer) put(data []int8, done bool) {
+	m.readMu.Lock()
+	defer m.readMu.Unlock()
+	m.data, m.done = data, done
+}
+
+func getTargetLength(index int) int {
+	chunkCount := index/kMemoizerChunkSize + 1
+
+	// Have to prevent integer overflow in case index = math.MaxInt - 1
+	if chunkCount > kMaxChunks {
+		chunkCount = kMaxChunks
+	}
+	return kMemoizerChunkSize * chunkCount
+}
+
 func (m *memoizer) wait(index int) ([]int8, bool) {
-	m.mu.Lock()
-	defer m.mu.Unlock()
-	if !m.done && m.maxLength <= index {
-		chunkCount := index/kMemoizerChunkSize + 1
-
-		// Have to prevent integer overflow in case index = math.MaxInt - 1
-		if chunkCount > kMaxChunks {
-			chunkCount = kMaxChunks
-		}
-		m.maxLength = kMemoizerChunkSize * chunkCount
-		m.mustGrow.Signal()
+	data, done := m.get()
+	targetLength := getTargetLength(index)
+	for !done && len(data) < targetLength {
+		data, done = m.grow(targetLength)
 	}
-	for !m.done && len(m.data) <= index {
-		m.updateAvailable.Wait()
-	}
-	return m.data, len(m.data) > index
+	return data, len(data) > index
 }
 
-func (m *memoizer) waitToGrow() {
-	m.mu.Lock()
-	defer m.mu.Unlock()
-	for len(m.data) >= m.maxLength {
-		m.mustGrow.Wait()
-	}
-}
-
-func (m *memoizer) setData(data []int8, done bool) {
-	m.mu.Lock()
-	defer m.mu.Unlock()
-	m.data = data
-	m.done = done
-	m.updateAvailable.Broadcast()
-}
-
-func (m *memoizer) run() {
-	var data []int8
-	for i := 0; i < kMaxChunks; i++ {
-		m.waitToGrow()
-		for j := 0; j < kMemoizerChunkSize; j++ {
+func (m *memoizer) grow(targetLength int) ([]int8, bool) {
+	m.updateMu.Lock()
+	defer m.updateMu.Unlock()
+	data, done := m.get()
+	if !done && len(data) < targetLength {
+		for range kMemoizerChunkSize {
 			x := m.iter()
 			if digitOutOfRange(x) {
-				m.setData(data, true)
-				return
+				done = true
+				break
 			}
 			data = append(data, int8(x))
 		}
-		m.setData(data, false)
+		m.put(data, done)
 	}
-	m.setData(data, true)
+	return data, done
 }
 
 type limitSpec struct {
