@@ -30,7 +30,6 @@ import (
 	"math"
 	"math/big"
 	"strings"
-	"sync"
 )
 
 const (
@@ -39,201 +38,13 @@ const (
 )
 
 var (
-	zeroNumber           = &FiniteNumber{}
-	globalNumSpecContext = &context{}
-	nilContext           *Context
+	zeroNumber = &FiniteNumber{}
 )
 
 var (
 	_ FiniteSequence = zeroNumber
 	_ Number         = zeroNumber
 )
-
-// Use a Context instance to create Number instances when you want to
-// free resources used by those Number instances before the program ends.
-// Closing a Context frees all resources used by the Number instances
-// it created. Once a Context is closed, it panics if used to create
-// Numbers. The zero value of Context is ready to use.
-//
-// Never copy a Context instance.
-//
-// Prefer using the methods of Context to create Numbers over the free
-// standing factory functions. The resources used by Numbers instances
-// created with free standing factory functions such as sqrt.Sqrt never
-// get freed.
-type Context struct {
-	mu    sync.Mutex
-	ctxt  context
-	specs []numberSpec
-}
-
-// Sqrt returns the square root of radican. Sqrt panics if radican is
-// negative.
-func (c *Context) Sqrt(radican int64) Number {
-	return c.nRootFrac(big.NewInt(radican), one, newSqrtManager)
-}
-
-// SqrtRat returns the square root of num / denom. denom must be positive,
-// and num must be non-negative or else SqrtRat panics.
-func (c *Context) SqrtRat(num, denom int64) Number {
-	return c.nRootFrac(big.NewInt(num), big.NewInt(denom), newSqrtManager)
-}
-
-// SqrtBigInt returns the square root of radican. SqrtBigInt panics if
-// radican is negative.
-func (c *Context) SqrtBigInt(radican *big.Int) Number {
-	return c.nRootFrac(radican, one, newSqrtManager)
-}
-
-// SqrtBigRat returns the square root of radican. The denominator of radican
-// must be positive, and the numerator must be non-negative or else SqrtBigRat
-// panics.
-func (c *Context) SqrtBigRat(radican *big.Rat) Number {
-	return c.nRootFrac(radican.Num(), radican.Denom(), newSqrtManager)
-}
-
-// CubeRoot returns the cube root of radican. CubeRoot panics if radican is
-// negative as Number can only hold positive results.
-func (c *Context) CubeRoot(radican int64) Number {
-	return c.nRootFrac(big.NewInt(radican), one, newCubeRootManager)
-}
-
-// CubeRootRat returns the cube root of num / denom. Because Number can only
-// hold positive results, denom must be positive, and num must be non-negative
-// or else CubeRootRat panics.
-func (c *Context) CubeRootRat(num, denom int64) Number {
-	return c.nRootFrac(big.NewInt(num), big.NewInt(denom), newCubeRootManager)
-}
-
-// CubeRootBigInt returns the cube root of radican. CubeRootBigInt panics if
-// radican is negative as Number can only hold positive results.
-func (c *Context) CubeRootBigInt(radican *big.Int) Number {
-	return c.nRootFrac(radican, one, newCubeRootManager)
-}
-
-// CubeRootBigRat returns the cube root of radican. Because Number can only
-// hold positive results, the denominator of radican must be positive, and the
-// numerator must be non-negative or else CubeRootBigRat panics.
-func (c *Context) CubeRootBigRat(radican *big.Rat) Number {
-	return c.nRootFrac(radican.Num(), radican.Denom(), newCubeRootManager)
-}
-
-// NewNumberForTesting creates an arbitrary Number for testing. fixed are
-// digits between 0 and 9 representing the non repeating digits that come
-// immediately after the decimal place of the mantissa. repeating are digits
-// between 0 and 9 representing the repeating digits that follow the non
-// repeating digits of the mantissa. exp is the exponent part of the
-// returned Number. NewNumberForTesting returns an error if fixed or
-// repeating contain values not between 0 and 9, or if the first digit of
-// the mantissa would be zero since mantissas must be between 0.1 inclusive
-// and 1.0 exclusive.
-func (c *Context) NewNumberForTesting(fixed, repeating []int, exp int) (Number, error) {
-	if len(fixed) == 0 && len(repeating) == 0 {
-		return zeroNumber, nil
-	}
-	if !validDigits(fixed) || !validDigits(repeating) {
-		return nil, errors.New("NewNumberForTesting: digits must be between 0 and 9")
-	}
-	gen := newRepeatingGenerator(fixed, repeating, exp)
-	digits, _ := gen.Generate()
-	if digits() == 0 {
-		return nil, errors.New("NewNumberForTesting: leading zeros not allowed in digits")
-	}
-	if len(repeating) == 0 {
-		return c.newFiniteNumber(gen.Generate()), nil
-	}
-	return c.newNumber(gen.Generate()), nil
-}
-
-// NewNumber returns a new Number based on g. Although g is expected to
-// follow the contract of Generator, if g yields mantissa digits outside the
-// range of 0 and 9, NewNumber regards that as a signal that there are no
-// more mantissa digits. Also if g happens to yield 0 as the first digit
-// of the mantissa, NewNumber will return zero.
-func (c *Context) NewNumber(g Generator) Number {
-	digits, exp := g.Generate()
-	first := digits()
-	if first == 0 || digitOutOfRange(first) {
-		return zeroNumber
-	}
-	return c.newNumber(firstAndThen(first, digits), exp)
-}
-
-// NewFiniteNumber works like NewNumberForTesting except that it
-// returns a *FiniteNumber instead of a Number. Note that there is no
-// repeating parameter because FiniteNumbers have a finite number of
-// digits.
-func (c *Context) NewFiniteNumber(fixed []int, exponent int) (*FiniteNumber, error) {
-	result, err := c.NewNumberForTesting(fixed, nil, exponent)
-	if err != nil {
-		return nil, err
-	}
-	return result.(*FiniteNumber), nil
-}
-
-// Close closes this Context freeing all resources used by the Number
-// instances it created.
-func (c *Context) Close() {
-	if c == nil {
-		return
-	}
-	c.mu.Lock()
-	defer c.mu.Unlock()
-	c.ctxt.Close()
-	for _, spec := range c.specs {
-		spec.FirstN(math.MaxInt)
-	}
-	c.specs = nil
-}
-
-// NumGoroutines returns the number of active goroutines in use to generate
-// digits for Numbers this Context created. Returns 0 after Close() is called.
-func (c *Context) NumGoroutines() int64 {
-	if c == nil {
-		return globalNumSpecContext.NumActive()
-	}
-	return c.ctxt.NumActive()
-}
-
-func (c *Context) numSpecs() int {
-	c.mu.Lock()
-	defer c.mu.Unlock()
-	return len(c.specs)
-}
-
-func (c *Context) nRootFrac(
-	num, denom *big.Int, newManager func() rootManager) Number {
-	checkNumDenom(num, denom)
-	if num.Sign() == 0 {
-		return zeroNumber
-	}
-	return c.newNumber(newNRootGenerator(num, denom, newManager).Generate())
-}
-
-// newNumber returns a new number. The first digit that digits generates
-// must be between 1 and 9.
-func (c *Context) newNumber(digits func() int, exp int) Number {
-	return opaqueNumber(c.newFiniteNumber(digits, exp))
-}
-
-func (c *Context) newFiniteNumber(digits func() int, exp int) *FiniteNumber {
-	mantissa := mantissa{spec: c.newMemoizeSpec(digits)}
-	return &FiniteNumber{exponent: exp, mantissa: mantissa}
-}
-
-func (c *Context) newMemoizeSpec(digits func() int) numberSpec {
-	if c == nil {
-		return newMemoizeSpec(digits, globalNumSpecContext)
-	}
-	c.mu.Lock()
-	defer c.mu.Unlock()
-	if c.ctxt.Closed() {
-		panic("Context closed")
-	}
-	result := newMemoizeSpec(digits, &c.ctxt)
-	c.specs = append(c.specs, result)
-	return result
-}
 
 // Number is a reference to a non-negative real number.
 // A non-zero Number is of the form mantissa * 10^exponent
@@ -306,63 +117,53 @@ type Number interface {
 
 // Sqrt returns the square root of radican. Sqrt panics if radican is
 // negative.
-// Prefer using Context.Sqrt for better lifecycle management of Numbers.
 func Sqrt(radican int64) Number {
-	return nilContext.Sqrt(radican)
+	return nRootFrac(big.NewInt(radican), one, newSqrtManager)
 }
 
 // SqrtRat returns the square root of num / denom. denom must be positive,
 // and num must be non-negative or else SqrtRat panics.
-// Prefer using Context.SqrtRat for better lifecycle management of Numbers.
 func SqrtRat(num, denom int64) Number {
-	return nilContext.SqrtRat(num, denom)
+	return nRootFrac(big.NewInt(num), big.NewInt(denom), newSqrtManager)
 }
 
 // SqrtBigInt returns the square root of radican. SqrtBigInt panics if
 // radican is negative.
-// Prefer using Context.SqrtBigInt for better lifecycle management of Numbers.
 func SqrtBigInt(radican *big.Int) Number {
-	return nilContext.SqrtBigInt(radican)
+	return nRootFrac(radican, one, newSqrtManager)
 }
 
 // SqrtBigRat returns the square root of radican. The denominator of radican
 // must be positive, and the numerator must be non-negative or else SqrtBigRat
 // panics.
-// Prefer using Context.SqrtBigRat for better lifecycle management of Numbers.
 func SqrtBigRat(radican *big.Rat) Number {
-	return nilContext.SqrtBigRat(radican)
+	return nRootFrac(radican.Num(), radican.Denom(), newSqrtManager)
 }
 
 // CubeRoot returns the cube root of radican. CubeRoot panics if radican is
 // negative as Number can only hold positive results.
-// Prefer using Context.CubeRoot for better lifecycle management of Numbers.
 func CubeRoot(radican int64) Number {
-	return nilContext.CubeRoot(radican)
+	return nRootFrac(big.NewInt(radican), one, newCubeRootManager)
 }
 
 // CubeRootRat returns the cube root of num / denom. Because Number can only
 // hold positive results, denom must be positive, and num must be non-negative
 // or else CubeRootRat panics.
-// Prefer using Context.CubeRootRat for better lifecycle management of Numbers.
 func CubeRootRat(num, denom int64) Number {
-	return nilContext.CubeRootRat(num, denom)
+	return nRootFrac(big.NewInt(num), big.NewInt(denom), newCubeRootManager)
 }
 
 // CubeRootBigInt returns the cube root of radican. CubeRootBigInt panics if
 // radican is negative as Number can only hold positive results.
-// Prefer using Context.CubeRootBigInt for better lifecycle management of
-// Numbers.
 func CubeRootBigInt(radican *big.Int) Number {
-	return nilContext.CubeRootBigInt(radican)
+	return nRootFrac(radican, one, newCubeRootManager)
 }
 
 // CubeRootBigRat returns the cube root of radican. Because Number can only
 // hold positive results, the denominator of radican must be positive, and the
 // numerator must be non-negative or else CubeRootBigRat panics.
-// Prefer using Context.CubeRootBigRat for better lifecycle management of
-// Numbers.
 func CubeRootBigRat(radican *big.Rat) Number {
-	return nilContext.CubeRootBigRat(radican)
+	return nRootFrac(radican.Num(), radican.Denom(), newCubeRootManager)
 }
 
 // NewNumberForTesting creates an arbitrary Number for testing. fixed are
@@ -374,10 +175,22 @@ func CubeRootBigRat(radican *big.Rat) Number {
 // repeating contain values not between 0 and 9, or if the first digit of
 // the mantissa would be zero since mantissas must be between 0.1 inclusive
 // and 1.0 exclusive.
-// Prefer using Context.NewNumberForTesting for better lifecycle management of
-// Numbers.
 func NewNumberForTesting(fixed, repeating []int, exp int) (Number, error) {
-	return nilContext.NewNumberForTesting(fixed, repeating, exp)
+	if len(fixed) == 0 && len(repeating) == 0 {
+		return zeroNumber, nil
+	}
+	if !validDigits(fixed) || !validDigits(repeating) {
+		return nil, errors.New("NewNumberForTesting: digits must be between 0 and 9")
+	}
+	gen := newRepeatingGenerator(fixed, repeating, exp)
+	digits, _ := gen.Generate()
+	if digits() == 0 {
+		return nil, errors.New("NewNumberForTesting: leading zeros not allowed in digits")
+	}
+	if len(repeating) == 0 {
+		return newFiniteNumber(gen.Generate()), nil
+	}
+	return newNumber(gen.Generate()), nil
 }
 
 // NewNumber returns a new Number based on g. Although g is expected to
@@ -385,9 +198,13 @@ func NewNumberForTesting(fixed, repeating []int, exp int) (Number, error) {
 // range of 0 and 9, NewNumber regards that as a signal that there are no
 // more mantissa digits. Also if g happens to yield 0 as the first digit
 // of the mantissa, NewNumber will return zero.
-// Prefer using Context.NewNumber for better lifecycle management of Numbers.
 func NewNumber(g Generator) Number {
-	return nilContext.NewNumber(g)
+	digits, exp := g.Generate()
+	first := digits()
+	if first == 0 || digitOutOfRange(first) {
+		return zeroNumber
+	}
+	return newNumber(firstAndThen(first, digits), exp)
 }
 
 // FiniteNumber is a Number with a finite number of digits. FiniteNumber
@@ -405,10 +222,12 @@ type FiniteNumber struct {
 // returns a *FiniteNumber instead of a Number. Note that there is no
 // repeating parameter because FiniteNumbers have a finite number of
 // digits.
-// Prefer using Context.NewFiniteNumber for better lifecycle management of
-// Numbers.
 func NewFiniteNumber(fixed []int, exponent int) (*FiniteNumber, error) {
-	return nilContext.NewFiniteNumber(fixed, exponent)
+	result, err := NewNumberForTesting(fixed, nil, exponent)
+	if err != nil {
+		return nil, err
+	}
+	return result.(*FiniteNumber), nil
 }
 
 // WithStart comes from the Sequence interface.
@@ -528,6 +347,26 @@ func (n *FiniteNumber) withMantissa(newMantissa mantissa) *FiniteNumber {
 }
 
 func (n *FiniteNumber) private() {
+}
+
+func nRootFrac(
+	num, denom *big.Int, newManager func() rootManager) Number {
+	checkNumDenom(num, denom)
+	if num.Sign() == 0 {
+		return zeroNumber
+	}
+	return newNumber(newNRootGenerator(num, denom, newManager).Generate())
+}
+
+// newNumber returns a new number. The first digit that digits generates
+// must be between 1 and 9.
+func newNumber(digits func() int, exp int) Number {
+	return opaqueNumber(newFiniteNumber(digits, exp))
+}
+
+func newFiniteNumber(digits func() int, exp int) *FiniteNumber {
+	mantissa := mantissa{spec: newMemoizeSpec(digits)}
+	return &FiniteNumber{exponent: exp, mantissa: mantissa}
 }
 
 func checkNumDenom(num, denom *big.Int) {

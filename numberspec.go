@@ -3,7 +3,6 @@ package sqrt
 import (
 	"math"
 	"sync"
-	"sync/atomic"
 )
 
 const (
@@ -18,31 +17,6 @@ type numberSpec interface {
 	FirstN(n int) []int8
 }
 
-type context struct {
-	active atomic.Int64
-	closed atomic.Bool
-}
-
-func (c *context) Start() {
-	c.active.Add(1)
-}
-
-func (c *context) End() {
-	c.active.Add(-1)
-}
-
-func (c *context) NumActive() int64 {
-	return c.active.Load()
-}
-
-func (c *context) Closed() bool {
-	return c.closed.Load()
-}
-
-func (c *context) Close() {
-	c.closed.Store(true)
-}
-
 type memoizer struct {
 	iter            func() int
 	mu              sync.Mutex
@@ -53,12 +27,11 @@ type memoizer struct {
 	done            bool
 }
 
-func newMemoizeSpec(iter func() int, ctxt *context) numberSpec {
+func newMemoizeSpec(iter func() int) numberSpec {
 	result := &memoizer{iter: iter}
 	result.mustGrow = sync.NewCond(&result.mu)
 	result.updateAvailable = sync.NewCond(&result.mu)
-	ctxt.Start()
-	go result.run(ctxt)
+	go result.run()
 	return result
 }
 
@@ -151,8 +124,7 @@ func (m *memoizer) setData(data []int8, done bool) {
 	m.updateAvailable.Broadcast()
 }
 
-func (m *memoizer) run(ctxt *context) {
-	defer ctxt.End()
+func (m *memoizer) run() {
 	var data []int8
 	for i := 0; i < kMaxChunks; i++ {
 		m.waitToGrow()
@@ -163,10 +135,6 @@ func (m *memoizer) run(ctxt *context) {
 				return
 			}
 			data = append(data, int8(x))
-		}
-		if ctxt.Closed() {
-			m.setData(data, true)
-			return
 		}
 		m.setData(data, false)
 	}
