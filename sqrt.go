@@ -365,7 +365,7 @@ func newNumber(digits func() int, exp int) Number {
 }
 
 func newFiniteNumber(digits func() int, exp int) *FiniteNumber {
-	mantissa := mantissa{spec: newMemoizeSpec(digits)}
+	mantissa := mantissa{digits: newdigitMemoizer(digits), limit: math.MaxInt}
 	return &FiniteNumber{exponent: exp, mantissa: mantissa}
 }
 
@@ -379,48 +379,38 @@ func checkNumDenom(num, denom *big.Int) {
 }
 
 type mantissa struct {
-	spec numberSpec
+	digits *digitMemoizer
+	limit  int
 }
 
 func (m mantissa) At(posit int) int {
-	if m.spec == nil {
+	if posit >= m.limit {
+		m.digits.At(m.limit)
 		return -1
 	}
-	return m.spec.At(posit)
+	return m.digits.At(posit)
 }
 
 func (m mantissa) IsZero() bool {
-	return m.spec == nil
+	return m == mantissa{}
 }
 
 func (m mantissa) ReverseScan(start int, yield func(index, value int) bool) {
-	digits := m.allDigits()
-	for index := len(digits) - 1; index >= start; index-- {
-		if !yield(index, int(digits[index])) {
-			return
-		}
-	}
+	m.digits.ReverseScan(min(start, m.limit), m.limit, yield)
 }
 
-func (m mantissa) Scan(index int, yield func(index, value int) bool) {
-	if m.spec == nil {
-		return
-	}
-	m.spec.Scan(index, math.MaxInt, yield)
+func (m mantissa) Scan(start int, yield func(index, value int) bool) {
+	m.digits.Scan(min(start, m.limit), m.limit, yield)
 }
 
-func (m mantissa) ScanInRange(index, start, end int, yield func(index, value int) bool) {
-	if m.spec == nil {
-		return
-	}
-	m.spec.Scan(max(index, start), end, yield)
+func (m mantissa) ScanInRange(
+	mantissaStart, start, end int, yield func(index, value int) bool) {
+	m.digits.Scan(
+		min(max(mantissaStart, start), m.limit), min(end, m.limit), yield)
 }
 
-func (m mantissa) ScanValues(index int, yield func(value int) bool) {
-	if m.spec == nil {
-		return
-	}
-	m.spec.ScanValues(index, math.MaxInt, yield)
+func (m mantissa) ScanValues(start int, yield func(value int) bool) {
+	m.digits.ScanValues(min(start, m.limit), m.limit, yield)
 }
 
 func (m mantissa) Values() iter.Seq[int] {
@@ -430,14 +420,14 @@ func (m mantissa) Values() iter.Seq[int] {
 }
 
 func (m mantissa) WithLimit(limit int) mantissa {
-	return mantissa{spec: withLimit(m.spec, limit)}
-}
-
-func (m mantissa) allDigits() []int8 {
-	if m.spec == nil {
-		return nil
+	if limit <= 0 {
+		return mantissa{}
 	}
-	return m.spec.FirstN(math.MaxInt)
+	result := m
+	if limit < result.limit {
+		result.limit = limit
+	}
+	return result
 }
 
 type formatSpec struct {
