@@ -224,7 +224,9 @@ func TestCubeRootSmallRat(t *testing.T) {
 }
 
 func TestExact(t *testing.T) {
-	n := fakeNumber().withExponent(1)
+	n := fakeNumber().WithSignificant(10).withExponent(0)
+	assert.Equal(t, "0.1234567890", n.(*FiniteNumber).Exact())
+	n = fakeNumber().withExponent(1)
 	assert.Equal(t, "1.2345678901234567890", n.WithSignificant(20).Exact())
 	n = fakeNumber().withExponent(7)
 	assert.Equal(t, "0.12345678e+07", n.WithSignificant(8).Exact())
@@ -389,6 +391,7 @@ func TestWithSignificant(t *testing.T) {
 func TestWithSignificantPanics(t *testing.T) {
 	n := Sqrt(2)
 	assert.Panics(t, func() { n.WithSignificant(-1) })
+	assert.Panics(t, func() { n.WithSignificant(10).WithSignificant(-1) })
 }
 
 func TestWithSignificantToZero(t *testing.T) {

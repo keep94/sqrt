@@ -57,21 +57,52 @@ func AsString(s FiniteSequence) string {
 	return sb.String()
 }
 
-func opaqueSequence(s Sequence) Sequence {
-	if _, ok := s.(*opqSequence); ok {
-		return s
-	}
-	return &opqSequence{Sequence: s}
+type sequence struct {
+	sequencePart
 }
 
-type opqSequence struct {
-	Sequence
-}
-
-func (s *opqSequence) WithStart(start int) Sequence {
-	result := s.Sequence.WithStart(start)
-	if result == s.Sequence {
+func (s *sequence) WithStart(start int) Sequence {
+	result := s.withStart(start)
+	if result == s.sequencePart {
 		return s
 	}
-	return opaqueSequence(result)
+	return &sequence{result}
+}
+
+func (s *sequence) WithEnd(end int) FiniteSequence {
+	return &finiteSequence{s.withEnd(end)}
+}
+
+func (s *sequence) private() {
+}
+
+type finiteSequence struct {
+	sequencePart
+}
+
+func (f *finiteSequence) WithStart(start int) Sequence {
+	return f.FiniteWithStart(start)
+}
+
+func (f *finiteSequence) FiniteWithStart(start int) FiniteSequence {
+	result := f.withStart(start)
+	if result == f.sequencePart {
+		return f
+	}
+	return &finiteSequence{result}
+}
+
+func (f *finiteSequence) WithEnd(end int) FiniteSequence {
+	result := f.withEnd(end)
+	if result == f.sequencePart {
+		return f
+	}
+	return &finiteSequence{result}
+}
+
+func (f *finiteSequence) Backward() iter.Seq2[int, int] {
+	return f.backward()
+}
+
+func (f *finiteSequence) private() {
 }
