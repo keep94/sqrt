@@ -23,6 +23,7 @@
 package sqrt
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"io"
@@ -301,9 +302,19 @@ func (n *FiniteNumber) Values() iter.Seq[int] {
 	return n.numberPart.Values()
 }
 
+// PrimeToStart comes from the Sequence interface.
+func (n *FiniteNumber) PrimeToStart(ctx context.Context) error {
+	return n.numberPart.PrimeToStart(ctx)
+}
+
 // Backward comes from the FiniteSequence interface.
 func (n *FiniteNumber) Backward() iter.Seq2[int, int] {
 	return n.backward()
+}
+
+// PrimeToEnd comes from the FiniteSequence interface.
+func (n *FiniteNumber) PrimeToEnd(ctx context.Context) error {
+	return n.primeToEnd(ctx)
 }
 
 func (n *FiniteNumber) withExponent(e int) Number {

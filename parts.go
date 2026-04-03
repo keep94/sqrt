@@ -1,6 +1,7 @@
 package sqrt
 
 import (
+	"context"
 	"fmt"
 	"iter"
 	"math"
@@ -50,6 +51,14 @@ func (m mantissa) Values() iter.Seq[int] {
 	}
 }
 
+func (m mantissa) PrimeToEnd(ctx context.Context) error {
+	return m.digits.PrimeTo(ctx, m.maxDigits)
+}
+
+func (m mantissa) PrimeTo(ctx context.Context, upTo int) error {
+	return m.digits.PrimeTo(ctx, min(upTo, m.maxDigits))
+}
+
 func (m mantissa) WithMaxDigits(maxDigits int) mantissa {
 	if maxDigits <= 0 {
 		return mantissa{}
@@ -82,6 +91,14 @@ func (s *sequencePart) Values() iter.Seq[int] {
 	return func(yield func(value int) bool) {
 		s.mantissa.ScanValues(s.start, yield)
 	}
+}
+
+func (s *sequencePart) PrimeToStart(ctx context.Context) error {
+	return s.mantissa.PrimeTo(ctx, s.start)
+}
+
+func (s *sequencePart) primeToEnd(ctx context.Context) error {
+	return s.mantissa.PrimeToEnd(ctx)
 }
 
 func (s *sequencePart) backward() iter.Seq2[int, int] {
@@ -158,8 +175,16 @@ func (n *numberPart) String() string {
 	return builder.String()
 }
 
+func (n *numberPart) PrimeToStart(ctx context.Context) error {
+	return nil
+}
+
 func (n *numberPart) IsZero() bool {
 	return *n == numberPart{}
+}
+
+func (n *numberPart) primeToEnd(ctx context.Context) error {
+	return n.mantissa.PrimeToEnd(ctx)
 }
 
 func (n *numberPart) backward() iter.Seq2[int, int] {

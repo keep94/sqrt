@@ -1,6 +1,7 @@
 package sqrt
 
 import (
+	"context"
 	"math"
 	"sync"
 )
@@ -84,6 +85,21 @@ func (m *digitMemoizer) ReverseScan(
 			return
 		}
 	}
+}
+
+func (m *digitMemoizer) PrimeTo(ctx context.Context, upTo int) error {
+	if upTo <= 0 {
+		return nil
+	}
+	data, done := m.get()
+	targetLength := getTargetLength(upTo - 1)
+	for !done && len(data) < targetLength {
+		if ctx.Err() != nil {
+			return ctx.Err()
+		}
+		data, done = m.grow(targetLength)
+	}
+	return nil
 }
 
 func (m *digitMemoizer) firstN(n int) []int8 {

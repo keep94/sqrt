@@ -1,6 +1,7 @@
 package sqrt
 
 import (
+	"context"
 	"iter"
 	"strings"
 )
@@ -32,6 +33,10 @@ type Sequence interface {
 	// zero based positions less than end.
 	WithEnd(end int) FiniteSequence
 
+	// PrimeToStart performs any necessary computations up front to ensure
+	// that this sequence can be iterated over without any initial lag.
+	PrimeToStart(ctx context.Context) error
+
 	private()
 }
 
@@ -46,6 +51,11 @@ type FiniteSequence interface {
 	// FiniteWithStart works like WithStart except that it returns a
 	// FiniteSequence.
 	FiniteWithStart(start int) FiniteSequence
+
+	// PrimeToEnd performs any necessary computations up front to ensure
+	// that this sequence can be iterated over with Backward without any
+	// initial lag.
+	PrimeToEnd(ctx context.Context) error
 }
 
 // AsString returns all the digits in s as a string.
@@ -102,6 +112,10 @@ func (f *finiteSequence) WithEnd(end int) FiniteSequence {
 
 func (f *finiteSequence) Backward() iter.Seq2[int, int] {
 	return f.backward()
+}
+
+func (f *finiteSequence) PrimeToEnd(ctx context.Context) error {
+	return f.primeToEnd(ctx)
 }
 
 func (f *finiteSequence) private() {
