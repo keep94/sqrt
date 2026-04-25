@@ -135,3 +135,32 @@ func ExampleFiniteNumber_At() {
 	// 6
 	// 4
 }
+
+func ExampleFiniteNumber_NumComputed() {
+	n := sqrt.Sqrt(5)
+
+	// Initially Number computes zero digits.
+	fmt.Println(n.NumComputed())
+
+	// Number can compute extra digits beyond what is needed.
+	fmt.Printf("%.70g\n", n)
+	firstCount := n.NumComputed()
+	fmt.Println(firstCount >= 70)
+
+	// Since Number already computed the digit at position 50, no extra
+	// computation is needed.
+	fmt.Println(n.At(50)) // 51st digit
+	fmt.Println(n.NumComputed() == firstCount)
+
+	// Extra computation may be needed here.
+	fmt.Println(n.At(199)) // 200th digit
+	fmt.Println(n.NumComputed() >= 200)
+	// Output:
+	// 0
+	// 2.236067977499789696409173668731276235440618359611525724270897245410520
+	// true
+	// 2
+	// true
+	// 7
+	// true
+}

@@ -112,6 +112,11 @@ type Number interface {
 	// IsZero returns true if this Number is zero.
 	IsZero() bool
 
+	// NumComputed returns the number of computed digits in this Number.
+	// If this Number is a FiniteNumber, NumComputed will never return more
+	// than the number of significant digits.
+	NumComputed() int
+
 	withExponent(e int) Number
 }
 
@@ -305,6 +310,11 @@ func (n *FiniteNumber) Values() iter.Seq[int] {
 // PrimeToStart comes from the Sequence interface.
 func (n *FiniteNumber) PrimeToStart(ctx context.Context) error {
 	return n.numberPart.PrimeToStart(ctx)
+}
+
+// NumComputed comes from the Number interface.
+func (n *FiniteNumber) NumComputed() int {
+	return n.numberPart.NumComputed()
 }
 
 // Backward comes from the FiniteSequence interface.

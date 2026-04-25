@@ -88,7 +88,7 @@ func (m *digitMemoizer) ReverseScan(
 }
 
 func (m *digitMemoizer) PrimeTo(ctx context.Context, upTo int) error {
-	if upTo <= 0 {
+	if m == nil || upTo <= 0 {
 		return nil
 	}
 	data, done := m.get()
@@ -100,6 +100,14 @@ func (m *digitMemoizer) PrimeTo(ctx context.Context, upTo int) error {
 		data, done = m.grow(targetLength)
 	}
 	return nil
+}
+
+func (m *digitMemoizer) NumComputed() int {
+	if m == nil {
+		return 0
+	}
+	data, _ := m.get()
+	return len(data)
 }
 
 func (m *digitMemoizer) firstN(n int) []int8 {

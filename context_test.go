@@ -2,8 +2,10 @@ package sqrt
 
 import (
 	"context"
+	"math"
 	"sync"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
 )
@@ -73,4 +75,48 @@ func TestPrimeFiniteNumberCancel(t *testing.T) {
 	}(ctx)
 	cancel()
 	wg.Wait()
+}
+
+func TestPrimeToStartOnZero(t *testing.T) {
+	var fn FiniteNumber
+	fn.WithStart(100).PrimeToStart(context.Background())
+}
+
+func TestNumComputedZero(t *testing.T) {
+	var zero FiniteNumber
+	assert.Equal(t, 0, zero.NumComputed())
+}
+
+func TestNumComputed(t *testing.T) {
+	n := Sqrt(5)
+	assert.Equal(t, 0, n.NumComputed())
+	computeFor(n, time.Millisecond)
+	oneMillis := n.WithSignificant(n.NumComputed())
+	assert.Equal(t, n.NumComputed(), oneMillis.NumComputed())
+	computeFor(n, time.Millisecond)
+	twoMillis := n.WithSignificant(n.NumComputed())
+	assert.Equal(t, n.NumComputed(), twoMillis.NumComputed())
+	assert.Greater(t, twoMillis.NumComputed(), oneMillis.NumComputed())
+	assert.Greater(t, oneMillis.NumComputed(), 0)
+}
+
+func TestNumComputedFinite(t *testing.T) {
+	n := Sqrt(100489)
+	assert.Equal(t, 0, n.NumComputed())
+	assert.Equal(t, "317", n.String())
+	assert.Equal(t, 3, n.NumComputed())
+}
+
+func TestNumComputedFiniteNumber(t *testing.T) {
+	fn := Sqrt(7).WithSignificant(266)
+	assert.Equal(t, 0, fn.NumComputed())
+	fn.PrimeToEnd(context.Background())
+	assert.Equal(t, 266, fn.NumComputed())
+	assert.Equal(t, 133, fn.WithSignificant(133).NumComputed())
+}
+
+func computeFor(n Number, duration time.Duration) {
+	ctx, cancel := context.WithTimeout(context.Background(), duration)
+	defer cancel()
+	n.WithSignificant(math.MaxInt).PrimeToEnd(ctx)
 }

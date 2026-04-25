@@ -70,6 +70,10 @@ func (m mantissa) WithMaxDigits(maxDigits int) mantissa {
 	return result
 }
 
+func (m mantissa) NumComputed() int {
+	return min(m.digits.NumComputed(), m.maxDigits)
+}
+
 type sequencePart struct {
 	mantissa mantissa
 	start    int
@@ -181,6 +185,10 @@ func (n *numberPart) PrimeToStart(ctx context.Context) error {
 
 func (n *numberPart) IsZero() bool {
 	return *n == numberPart{}
+}
+
+func (n *numberPart) NumComputed() int {
+	return n.mantissa.NumComputed()
 }
 
 func (n *numberPart) primeToEnd(ctx context.Context) error {
