@@ -3,9 +3,15 @@ package sqrt
 import (
 	"context"
 	"fmt"
+	"io"
 	"iter"
 	"math"
 	"strings"
+)
+
+const (
+	fPrecision = 6
+	gPrecision = 16
 )
 
 type mantissa struct {
@@ -216,4 +222,116 @@ func (n *numberPart) withEnd(end int) numberPart {
 	result := *n
 	result.mantissa = result.mantissa.WithMaxDigits(end)
 	return result
+}
+
+type formatSpec struct {
+	sigDigits       int
+	exactDigitCount bool
+	sci             bool
+	capital         bool
+}
+
+func newFormatSpec(state fmt.State, verb rune, exponent int) (
+	formatSpec, bool) {
+	precision, precisionOk := state.Precision()
+	switch verb {
+	case 'f', 'F':
+		if !precisionOk {
+			precision = fPrecision
+		}
+		return formatSpecForF(precision, exponent), true
+	case 'g', 'G', 'v':
+		if !precisionOk {
+			precision = gPrecision
+		}
+		return formatSpecForG(precision, exponent, verb == 'G'), true
+	case 'e', 'E':
+		if !precisionOk {
+			precision = fPrecision
+		}
+		return formatSpecForE(precision, verb == 'E'), true
+	default:
+		return formatSpec{}, false
+	}
+}
+
+func formatSpecForF(precision, exponent int) formatSpec {
+	sigDigits := precision + exponent
+	return formatSpec{sigDigits: sigDigits, exactDigitCount: true}
+}
+
+func formatSpecForG(precision, exponent int, capital bool) formatSpec {
+	sigDigits := precision
+	if sigDigits == 0 {
+		sigDigits = 1
+	}
+	sci := sigDigits < exponent || bigExponent(exponent)
+	return formatSpec{sigDigits: sigDigits, sci: sci, capital: capital}
+}
+
+func formatSpecForE(precision int, capital bool) formatSpec {
+	return formatSpec{
+		sigDigits:       precision,
+		exactDigitCount: true,
+		sci:             true,
+		capital:         capital}
+}
+
+func (f formatSpec) PrintField(state fmt.State, n *numberPart) {
+	width, widthOk := state.Width()
+	if !widthOk {
+		f.PrintNumber(state, n)
+		return
+	}
+	var builder strings.Builder
+	f.PrintNumber(&builder, n)
+	field := builder.String()
+	if !state.Flag('-') && len(field) < width {
+		fmt.Fprint(state, strings.Repeat(" ", width-len(field)))
+	}
+	fmt.Fprint(state, field)
+	if state.Flag('-') && len(field) < width {
+		fmt.Fprint(state, strings.Repeat(" ", width-len(field)))
+	}
+}
+
+func (f formatSpec) PrintNumber(w io.Writer, n *numberPart) {
+	if f.sci {
+		sep := "e"
+		if f.capital {
+			sep = "E"
+		}
+		f.printSci(w, n.mantissa, n.exponent, sep)
+	} else {
+		f.printFixed(w, n.mantissa, n.exponent)
+	}
+}
+
+func (f formatSpec) printFixed(w io.Writer, m mantissa, exponent int) {
+	formatter := newFormatter(w, f.sigDigits, exponent, f.exactDigitCount)
+	fromMantissa(m, formatter)
+	formatter.Finish()
+}
+
+func (f formatSpec) printSci(
+	w io.Writer, m mantissa, exponent int, sep string) {
+	f.printFixed(w, m, 0)
+	fmt.Fprint(w, sep)
+	fmt.Fprintf(w, "%+03d", exponent)
+}
+
+func fromMantissa(m mantissa, formatter *formatter) {
+	if !formatter.CanConsume() {
+		return
+	}
+	for digit := range m.Values() {
+		formatter.Consume(digit)
+		if !formatter.CanConsume() {
+			return
+		}
+	}
+}
+
+func bigExponent(exponent int) bool {
+	return exponent < -3 || exponent > 6
 }
