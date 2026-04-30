@@ -115,6 +115,37 @@ func TestNumComputedFiniteNumber(t *testing.T) {
 	assert.Equal(t, 133, fn.WithSignificant(133).NumComputed())
 }
 
+func TestPrimeToStartNoopWithContextCancel(t *testing.T) {
+	n := Sqrt(19)
+	n.WithEnd(1234).PrimeToEnd(context.Background())
+	numComputed := n.NumComputed()
+	canceledCtx, cancel := context.WithCancel(context.Background())
+	cancel()
+	n.WithStart(1000000).PrimeToStart(canceledCtx)
+	assert.Equal(t, numComputed, n.NumComputed())
+}
+
+func TestPrimeToEndNoopWithContextCancel(t *testing.T) {
+	n := Sqrt(31)
+	n.WithEnd(1234).PrimeToEnd(context.Background())
+	numComputed := n.NumComputed()
+	canceledCtx, cancel := context.WithCancel(context.Background())
+	cancel()
+	n.WithEnd(1000000).PrimeToEnd(canceledCtx)
+	assert.Equal(t, numComputed, n.NumComputed())
+}
+
+func TestPrimeToStartWhenEndLessThanStart(t *testing.T) {
+	n := Sqrt(37)
+	n.WithStart(2000000).WithEnd(1000).PrimeToStart(context.Background())
+}
+
+func TestPrimeToStartAtZero(t *testing.T) {
+	n := Sqrt(41)
+	n.WithStart(0).PrimeToStart(context.Background())
+	assert.Equal(t, 0, n.NumComputed())
+}
+
 func computeFor(n Number, duration time.Duration) {
 	ctx, cancel := context.WithTimeout(context.Background(), duration)
 	defer cancel()
