@@ -19,7 +19,7 @@ func newmantissa(digits func() int) mantissa {
 
 func (m mantissa) At(posit int) int {
 	if posit >= m.maxDigits {
-		m.digits.At(m.maxDigits)
+		m.digits.At(m.maxDigits - 1)
 		return -1
 	}
 	return m.digits.At(posit)

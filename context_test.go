@@ -146,6 +146,86 @@ func TestPrimeToStartAtZero(t *testing.T) {
 	assert.Equal(t, 0, n.NumComputed())
 }
 
+func TestNoComputationsPastEndAll(t *testing.T) {
+	n := Sqrt(43)
+	computeFor(n, time.Millisecond)
+	count := n.NumComputed()
+	fn := n.WithSignificant(count)
+	for range fn.WithStart(count - 1).All() {
+	}
+	assert.Equal(t, count, n.NumComputed())
+}
+
+func TestNoComputationsPastEndAllEmpty(t *testing.T) {
+	n := Sqrt(43)
+	computeFor(n, time.Millisecond)
+	count := n.NumComputed()
+	fn := n.WithSignificant(count)
+	for range fn.WithStart(count).All() {
+	}
+	assert.Equal(t, count, n.NumComputed())
+}
+
+func TestNoComputationsPastEndAllInRange(t *testing.T) {
+	n := Sqrt(43)
+	computeFor(n, time.Millisecond)
+	count := n.NumComputed()
+	fn := n.WithSignificant(count)
+	for range fn.AllInRange(count-1, count) {
+	}
+	assert.Equal(t, count, n.NumComputed())
+}
+
+func TestNoComputationsPastEndAllInRangeEmpty(t *testing.T) {
+	n := Sqrt(43)
+	computeFor(n, time.Millisecond)
+	count := n.NumComputed()
+	fn := n.WithSignificant(count)
+	for range fn.AllInRange(count, count) {
+	}
+	assert.Equal(t, count, n.NumComputed())
+}
+
+func TestNoComputationsPastEndValues(t *testing.T) {
+	n := Sqrt(43)
+	computeFor(n, time.Millisecond)
+	count := n.NumComputed()
+	fn := n.WithSignificant(count)
+	for range fn.WithStart(count - 1).Values() {
+	}
+	assert.Equal(t, count, n.NumComputed())
+}
+
+func TestNoComputationsPastEndValuesEmpty(t *testing.T) {
+	n := Sqrt(43)
+	computeFor(n, time.Millisecond)
+	count := n.NumComputed()
+	fn := n.WithSignificant(count)
+	for range fn.WithStart(count).Values() {
+	}
+	assert.Equal(t, count, n.NumComputed())
+}
+
+func TestNoComputationsPastEndAt(t *testing.T) {
+	n := Sqrt(43)
+	computeFor(n, time.Millisecond)
+	count := n.NumComputed()
+	fn := n.WithSignificant(count)
+	assert.GreaterOrEqual(t, fn.At(count-1), 0)
+	assert.Equal(t, -1, fn.At(count))
+	assert.Equal(t, count, n.NumComputed())
+}
+
+func TestNoComputationsPastEndBackward(t *testing.T) {
+	n := Sqrt(43)
+	computeFor(n, time.Millisecond)
+	count := n.NumComputed()
+	fn := n.WithSignificant(count)
+	for range fn.FiniteWithStart(count - 1).Backward() {
+	}
+	assert.Equal(t, count, n.NumComputed())
+}
+
 func computeFor(n Number, duration time.Duration) {
 	ctx, cancel := context.WithTimeout(context.Background(), duration)
 	defer cancel()

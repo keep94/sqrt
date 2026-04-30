@@ -42,15 +42,19 @@ func (m *digitMemoizer) Scan(
 	if m == nil {
 		return
 	}
-	data, ok := m.wait(start)
-	for ok && start < end {
+	var data []int8
+	for start < end {
+		if start >= len(data) {
+			var ok bool
+			data, ok = m.wait(start)
+			if !ok {
+				return
+			}
+		}
 		if !yield(start, int(data[start])) {
 			return
 		}
 		start++
-		if start == len(data) {
-			data, ok = m.wait(start)
-		}
 	}
 }
 
@@ -62,15 +66,19 @@ func (m *digitMemoizer) ScanValues(
 	if m == nil {
 		return
 	}
-	data, ok := m.wait(start)
-	for ok && start < end {
+	var data []int8
+	for start < end {
+		if start >= len(data) {
+			var ok bool
+			data, ok = m.wait(start)
+			if !ok {
+				return
+			}
+		}
 		if !yield(int(data[start])) {
 			return
 		}
 		start++
-		if start == len(data) {
-			data, ok = m.wait(start)
-		}
 	}
 }
 
